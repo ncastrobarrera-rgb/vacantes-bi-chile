@@ -12,6 +12,8 @@ from typing import Any
 
 import requests
 
+from db import guardar_vacantes, init_db
+
 # === Configuración ===
 BASE_URL = "https://www.getonbrd.com/api/v0"
 PAIS = "cl"
@@ -88,7 +90,7 @@ def empresa_desde_slug(job_id: str) -> str:
     return "—"
 
 
-def mostrar_job(job: dict[str, Any], idx: int) -> None:
+def mostrar_job(job: dict[str, Any], idx: int, es_nueva: bool = False) -> None:
     attrs = job.get("attributes", {})
     titulo = attrs.get("title", "Sin título")
     remote = "🏠 Remoto" if attrs.get("remote") else "🏢 Presencial/Híbrido"
@@ -104,7 +106,8 @@ def mostrar_job(job: dict[str, Any], idx: int) -> None:
     if publicado:
         fecha_str = datetime.fromtimestamp(publicado).strftime("%Y-%m-%d")
 
-    print(f"\n[{idx}] {titulo}")
+    marca = "🆕 " if es_nueva else ""
+    print(f"\n[{idx}] {marca}{titulo}")
     print(f"    🏢 {empresa}")
     print(f"    📂 {categoria}  |  {remote}")
     print(f"    📅 {fecha_str}  |  👥 {aplicantes} postulantes")
@@ -150,9 +153,29 @@ def main() -> None:
         reverse=True,
     )
 
-    # 4. Mostrar
+    # === Persistencia: normalizar y guardar ===
+    init_db()
+    vacantes_normalizadas = [
+        {
+            "id": j.get("id"),
+            "titulo": j.get("attributes", {}).get("title"),
+            "empresa": empresa_desde_slug(j.get("id", "")),
+            "categoria": j.get("attributes", {}).get("category_name"),
+            "remote": 1 if j.get("attributes", {}).get("remote") else 0,
+            "salario_min": j.get("attributes", {}).get("min_salary"),
+            "salario_max": j.get("attributes", {}).get("max_salary"),
+            "publicado_at": j.get("attributes", {}).get("published_at"),
+            "applications_count": j.get("attributes", {}).get("applications_count"),
+            "url": j.get("links", {}).get("public_url"),
+        }
+        for j in candidatas
+    ]
+    ids_nuevas = guardar_vacantes(vacantes_normalizadas)
+    print(f"💾 {len(ids_nuevas)} vacantes nuevas guardadas en la base.\n")
+
     for i, job in enumerate(candidatas, 1):
-        mostrar_job(job, i)
+        es_nueva = job.get("id") in ids_nuevas
+        mostrar_job(job, i, es_nueva=es_nueva)
 
     print("\n" + "=" * 72)
     print(f"✅ Listo. {len(candidatas)} vacantes mostradas.\n")
