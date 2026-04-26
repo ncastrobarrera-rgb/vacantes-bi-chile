@@ -7,7 +7,7 @@ Estrategia:
 3. Filtra por seniority junior + rango de salario CLP
 4. Ordena por fecha de publicación (más reciente primero)
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import requests
@@ -66,6 +66,14 @@ def cumple_salario(job: dict[str, Any]) -> bool:
         return False
     return True
 
+def es_reciente(job: dict[str, Any], dias_max: int = 60) -> bool:
+    """True si la vacante fue publicada hace menos de `dias_max` días."""
+    publicado = job.get("attributes", {}).get("published_at")
+    if not publicado:
+        return False
+    fecha_pub = datetime.fromtimestamp(publicado)
+    limite = datetime.now() - timedelta(days=dias_max)
+    return fecha_pub >= limite
 
 def empresa_desde_slug(job_id: str) -> str:
     """El slug del job tiene formato 'titulo-empresa-modalidad'.
@@ -127,7 +135,7 @@ def main() -> None:
     print(f"\n📊 Total único:        {len(vistos)} vacantes")
 
     # 2. Filtrar por seniority + salario
-    candidatas = [j for j in vistos.values() if es_junior(j) and cumple_salario(j)]
+    candidatas = [j for j in vistos.values() if es_junior(j) and cumple_salario(j) and es_reciente(j, dias_max=60)]
     print(f"📋 Cumplen criterios:  {len(candidatas)}")
     print("=" * 72)
 
